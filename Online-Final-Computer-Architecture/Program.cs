@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace Online_Final_Computer_Architecture
@@ -98,6 +99,16 @@ namespace Online_Final_Computer_Architecture
 
         private static void PrintResults(Solution result) 
         {
+            //Header
+            Console.WriteLine("{0, -21} {1,-16} {2,-18}", "Instruction", "Hazard", "Registers");
+
+            foreach (var hazard in result.PotentialHazards) 
+            {
+                if(!hazard.Name.Equals("None"))
+                    Console.WriteLine("{0,-21} {1,-16} {2, -18}", hazard.Instruction, hazard.Name, hazard.Message);
+            }
+            Console.WriteLine();
+
             Console.WriteLine("Without Forwarding Unit");
             foreach (var pipe in result.Pipelines[0]) 
             {

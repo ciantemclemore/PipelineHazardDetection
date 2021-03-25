@@ -33,7 +33,8 @@ namespace Online_Final_Computer_Architecture
 
             solution.Pipelines.Add(pipelineNoForwardingUnit);
             solution.Pipelines.Add(pipelineWithForwardingUnit);
-            
+
+            solution.PotentialHazards = new List<HazardConfirmation>(_potentialHazards);
 
             return solution;
         }
@@ -52,15 +53,12 @@ namespace Online_Final_Computer_Architecture
 
         private void TestForHazards(List<List<string>> pipeline, List<List<string>> commands, bool isForwarding)
         {
-            StructuralHazardTest(pipeline, commands);
             DataHazardTest(pipeline, commands, isForwarding);
+            StructuralHazardTest(pipeline, commands, isForwarding);
         }
 
         private void DataHazardTest(List<List<string>> pipeline, List<List<string>> commands, bool isForwarding)
         {
-            //First instruction is always a gimme
-            
-
             //Compare each level of the instructions
             for (int i = 1; i < commands.Count; i++)
             {
@@ -82,44 +80,15 @@ namespace Online_Final_Computer_Architecture
                     var wawHazardConfirmation = WriteAfterWriteHazardCheck(instructionToCompare, currentInstruction,
                                                                         instructionToCompareIndex, currentInstructionIndex, pipeline);
 
-                    //Add all hazard confirmations for the current instruction
-                    //if (_potentialHazards.ContainsKey(i))
-                    //{
-                    //    _potentialHazards[i].Add(rawHazardConfirmation);
-                    //    _potentialHazards[i].Add(warHazardConfirmation);
-                    //    _potentialHazards[i].Add(wawHazardConfirmation);
-                    //}
-                    //else
-                    //{
-                    //    _potentialHazards.Add(i, new List<HazardConfirmation> { rawHazardConfirmation, warHazardConfirmation, warHazardConfirmation });
-                    //}
+                    if (!isForwarding) 
+                    {
+                        _potentialHazards.Add(rawHazardConfirmation);
+                        _potentialHazards.Add(warHazardConfirmation);
+                        _potentialHazards.Add(wawHazardConfirmation);
+                    }
                     
                     //Redraw the pipeline
-                    RecreatePipeline(currentInstructionIndex, currentInstruction[0], instructionToCompare[0], pipeline, rawHazardConfirmation, isForwarding);
-
-                    //if (rawHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, rawHazardConfirmation);
-                    
-
-                    //var warHazardConfirmation = WriteAfterReadHazardCheck(instructionToCompare, currentInstruction, 
-                    //                                                      instructionToCompareIndex, currentInstructionIndex, pipeline);
-
-                    //if(warHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, warHazardConfirmation);
-
-                    //var wawHazardConfirmation = WriteAfterWriteHazardCheck(instructionToCompare, currentInstruction,
-                    //                                                       instructionToCompareIndex, currentInstructionIndex, pipeline);
-
-                    //if (wawHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, wawHazardConfirmation);
-
-
-                    //Output all hazards: RAW, WAR, WAW
-                    //Console.Write($"{currentInstruction[0]}: {rawHazardConfirmation.Name}  ");
-                    //Console.WriteLine($"Registers: {rawHazardConfirmation.Message}");
-
-                    //Console.Write($"{currentInstruction[0]}: {warHazardConfirmation.Name}  ");
-                    //Console.WriteLine($"Registers: {warHazardConfirmation.Message}");
-
-                    //Console.Write($"{currentInstruction[0]}: {wawHazardConfirmation.Name}  ");
-                    //Console.WriteLine($"Registers: {wawHazardConfirmation.Message}");
+                    RecreatePipeline(currentInstructionIndex, pipeline, rawHazardConfirmation, isForwarding);
                 }
             }
         }
@@ -165,6 +134,7 @@ namespace Online_Final_Computer_Architecture
             //Add final results to the hazard confirmation
             hazardConfirmation.IsHazard = hazardConfirmation.Registers.Count > 0 ? true : false;
             hazardConfirmation.Name = hazardConfirmation.IsHazard ? "RAW" : "None";
+            hazardConfirmation.Instruction = $"{currentInstruction[0]} {currentInstruction[1]}, {currentInstruction[2]} {currentInstruction[3]}";
 
             //Determine amount of stalls based on where reg is needed versus available
             if (isForwarding)
@@ -285,6 +255,7 @@ namespace Online_Final_Computer_Architecture
             //Add final results to the hazard confirmation
             hazardConfirmation.IsHazard = hazardConfirmation.Registers.Count > 0 ? true : false;
             hazardConfirmation.Name = hazardConfirmation.IsHazard ? "WAR" : "None";
+            hazardConfirmation.Instruction = $"{currentInstruction[0]} {currentInstruction[1]}, {currentInstruction[2]} {currentInstruction[3]}";
 
             //Determine amount of stalls based on where reg is needed versus available
             var pipeToCompare = pipeline[comparePipeIndex].IndexOf("D");
@@ -334,6 +305,7 @@ namespace Online_Final_Computer_Architecture
             //Add final results to the hazard confirmation
             hazardConfirmation.IsHazard = hazardConfirmation.Registers.Count > 0 ? true : false;
             hazardConfirmation.Name = hazardConfirmation.IsHazard ? "WAW" : "None";
+            hazardConfirmation.Instruction = $"{currentInstruction[0]} {currentInstruction[1]}, {currentInstruction[2]} {currentInstruction[3]}";
 
             //No stalls needed in this case, depends on system... goes based on general pipeline
             hazardConfirmation.StallCount = 0;
@@ -346,7 +318,7 @@ namespace Online_Final_Computer_Architecture
             return hazardConfirmation;
         }
 
-        private void StructuralHazardTest(List<List<string>> pipeline, List<List<string>> commands)
+        private void StructuralHazardTest(List<List<string>> pipeline, List<List<string>> commands, bool isForwarding)
         {
             //Structural Hazard Test
             //Check to see if resources are being used at the same time in the pipeline
@@ -370,23 +342,35 @@ namespace Online_Final_Computer_Architecture
                         {
                             //This checks to see if pipeline stages overlap
                             //Ex. Fetch stage in pipe 1 overlaps Fetch stage in pipe 0
-                            if (currentPipe[k + currentPipeIndex].Equals(pipeToCompare[pipeToCompareContentIndex]))
+                            if ((!string.IsNullOrWhiteSpace(currentPipe[k + currentPipeIndex]) && !string.IsNullOrWhiteSpace(pipeToCompare[pipeToCompareContentIndex])) && 
+                                (currentPipe[k + currentPipeIndex].Equals(pipeToCompare[pipeToCompareContentIndex])))
                             {
-                                Console.WriteLine($"Pipe stage matches at Current Pipe {currentPipe[k + currentPipeIndex]} and PipeToCompare {pipeToCompare[pipeToCompareContentIndex]}");
+                                //Console.WriteLine($"Pipe stage matches at Current Pipe {currentPipe[k + currentPipeIndex]} and PipeToCompare {pipeToCompare[pipeToCompareContentIndex]}");
+                                
+                                var currentInstruction = commands[currentPipeIndex];
+                                var currentInstructionIndex = commands.IndexOf(currentInstruction);
 
+                                var hazardConfirmation = new HazardConfirmation()
+                                {
+                                    Instruction = $"{currentInstruction[0]} {currentInstruction[1]}, {currentInstruction[2]} {currentInstruction[3]}",
+                                    IsHazard = true,
+                                    Name = "Structural Hazard",
+                                    StallCount = 1,
+                                };
+                                RecreatePipeline(currentInstructionIndex, pipeline, hazardConfirmation, isForwarding);
                                 //Will need to store the dependency message somewhere for the current pipe facing the dependency
                             }
-
                             //Now we need to check if instruction types require the same resource
-                            if (currentPipe[k + currentPipeIndex].Equals("F") && pipeToCompare[pipeToCompareContentIndex].Equals("M") &&
-                                (commands[pipeToCompareIndex][0].Equals("lw", StringComparison.OrdinalIgnoreCase) || commands[pipeToCompareIndex][0].Equals("sw", StringComparison.OrdinalIgnoreCase)))
-                            {
-                                Console.WriteLine($"Structural Hazard at Pipe {currentPipeIndex} due to Pipe {pipeToCompareIndex} instruction");
-                            }
+                            //Can be used if we specify what type of memory we are using.. unified or separate?
+                            //if (currentPipe[k + currentPipeIndex].Equals("F") && pipeToCompare[pipeToCompareContentIndex].Equals("M") &&
+                            //    (commands[pipeToCompareIndex][0].Equals("lw", StringComparison.OrdinalIgnoreCase) || commands[pipeToCompareIndex][0].Equals("sw", StringComparison.OrdinalIgnoreCase)))
+                            //{
+                            //    Console.WriteLine($"Structural Hazard at Pipe {currentPipeIndex} due to Pipe {pipeToCompareIndex} instruction");
+                            //}
                         }
                         else
                         {
-                            Console.WriteLine($"Done checking Current Pipe: {currentPipeIndex} against Pipe: {pipeToCompareIndex}");
+                            //Console.WriteLine($"Done checking Current Pipe: {currentPipeIndex} against Pipe: {pipeToCompareIndex}");
                             break;
                         }
                     }
@@ -418,9 +402,9 @@ namespace Online_Final_Computer_Architecture
             return pipeline;
         }
 
-        public void RecreatePipeline(int instructionToUpdateIndex, string currentInstruction, string instructionToCompare, List<List<string>> pipeline, HazardConfirmation hazardConfirmation, bool isForwarding) 
+        public void RecreatePipeline(int pipeIndex, List<List<string>> pipeline, HazardConfirmation hazardConfirmation, bool isForwarding) 
         {
-            var pipeToUpdate = pipeline[instructionToUpdateIndex];
+            var pipeToUpdate = pipeline[pipeIndex];
 
             if (hazardConfirmation.Name.Equals("RAW"))
             {
@@ -448,23 +432,6 @@ namespace Online_Final_Computer_Architecture
                         pipeToUpdate.Insert(stallStartIndex, "S");
                     }
                 }
-                //Now fix all instructions below the updated pipe
-                int shiftInstructionCount = pipeToUpdate.IndexOf("D");
-                for (int j = instructionToUpdateIndex + 1; j < pipeline.Count; j++)
-                {
-                    var currentPipe = pipeline[j];
-                    if (currentPipe.Count > 0) currentPipe.Clear();
-                    for (int k = 0; k < shiftInstructionCount; k++)
-                    {
-                        currentPipe.Add(" ");
-                    }
-                    currentPipe.Add("F");
-                    currentPipe.Add("D");
-                    currentPipe.Add("E");
-                    currentPipe.Add("M");
-                    currentPipe.Add("W");
-                    shiftInstructionCount++;
-                }
             }
             
             if (hazardConfirmation.Name.Equals("WAR"))
@@ -485,7 +452,32 @@ namespace Online_Final_Computer_Architecture
 
             if (hazardConfirmation.Name.Equals("Structural Hazard")) 
             {
-                
+                //Find the fetch index and insert at 1 index after to delay decoding
+                var fetchIndex = pipeToUpdate.IndexOf("F");
+
+                for (int i = 0; i < hazardConfirmation.StallCount; i++)
+                {
+                    //Include the stalls into the pipe
+                    pipeToUpdate.Insert(fetchIndex, "S");
+                }
+            }
+
+            //Now fix all instructions below the updated pipe
+            int shiftInstructionCount = pipeToUpdate.IndexOf("D");
+            for (int j = pipeIndex + 1; j < pipeline.Count; j++)
+            {
+                var currentPipe = pipeline[j];
+                if (currentPipe.Count > 0) currentPipe.Clear();
+                for (int k = 0; k < shiftInstructionCount; k++)
+                {
+                    currentPipe.Add(" ");
+                }
+                currentPipe.Add("F");
+                currentPipe.Add("D");
+                currentPipe.Add("E");
+                currentPipe.Add("M");
+                currentPipe.Add("W");
+                shiftInstructionCount++;
             }
         }
 
