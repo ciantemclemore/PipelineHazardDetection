@@ -45,10 +45,10 @@ namespace Online_Final_Computer_Architecture
         private void TestForHazards(List<List<string>> pipeline, List<List<string>> commands)
         {
             StructuralHazardTest(pipeline, commands);
-            DataHazardTest(pipeline, commands);
+            DataHazardTest(pipeline, commands, true);
         }
 
-        private void DataHazardTest(List<List<string>> pipeline, List<List<string>> commands)
+        private void DataHazardTest(List<List<string>> pipeline, List<List<string>> commands, bool isForwarding)
         {
             //Compare each level of the instructions
 
@@ -66,23 +66,36 @@ namespace Online_Final_Computer_Architecture
                     var instructionToCompareIndex = commands.IndexOf(instructionToCompare);
 
 
-                    //Test Read after write hazard
-                    //For RAW, only pass in the operands that need to be read
-                    var rawHazardConfirmation = ReadAfterWriteHazardCheck(instructionToCompare, currentInstruction, 
-                                                                       instructionToCompareIndex,currentInstructionIndex, pipeline);
+                    //Create the pipeline without a forwarding unit
+                    HazardConfirmation rawHazardConfirmation = new HazardConfirmation();
+                    HazardConfirmation warHazardConfirmation = new HazardConfirmation();
+                    HazardConfirmation wawHazardConfirmation = new HazardConfirmation();
 
-                    if(rawHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, rawHazardConfirmation);
+                    
+                    rawHazardConfirmation = ReadAfterWriteHazardCheck(instructionToCompare, currentInstruction, 
+                                                                        instructionToCompareIndex,currentInstructionIndex, pipeline, isForwarding);
+                        
+                    warHazardConfirmation = WriteAfterReadHazardCheck(instructionToCompare, currentInstruction,
+                                                                        instructionToCompareIndex, currentInstructionIndex, pipeline);
+
+                    wawHazardConfirmation = WriteAfterWriteHazardCheck(instructionToCompare, currentInstruction,
+                                                                        instructionToCompareIndex, currentInstructionIndex, pipeline);
                     
 
-                    var warHazardConfirmation = WriteAfterReadHazardCheck(instructionToCompare, currentInstruction, 
-                                                                          instructionToCompareIndex, currentInstructionIndex, pipeline);
+                    RecreatePipeline(currentInstructionIndex, pipeline, rawHazardConfirmation);
 
-                    if(warHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, warHazardConfirmation);
+                    //if (rawHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, rawHazardConfirmation);
+                    
 
-                    var wawHazardConfirmation = WriteAfterWriteHazardCheck(instructionToCompare, currentInstruction,
-                                                                           instructionToCompareIndex, currentInstructionIndex, pipeline);
+                    //var warHazardConfirmation = WriteAfterReadHazardCheck(instructionToCompare, currentInstruction, 
+                    //                                                      instructionToCompareIndex, currentInstructionIndex, pipeline);
 
-                    if (wawHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, wawHazardConfirmation);
+                    //if(warHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, warHazardConfirmation);
+
+                    //var wawHazardConfirmation = WriteAfterWriteHazardCheck(instructionToCompare, currentInstruction,
+                    //                                                       instructionToCompareIndex, currentInstructionIndex, pipeline);
+
+                    //if (wawHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, wawHazardConfirmation);
 
 
                     //Output all hazards: RAW, WAR, WAW
@@ -116,20 +129,16 @@ namespace Online_Final_Computer_Architecture
             }
         }
 
-        private HazardConfirmation ReadAfterWriteHazardCheck(List<string> instructionToCompare, List<string> currentInstruction, int comparePipeIndex, int currentPipeIndex, List<List<string>> pipeline)
+        private HazardConfirmation ReadAfterWriteHazardCheck(List<string> instructionToCompare, List<string> currentInstruction, int comparePipeIndex, int currentPipeIndex, List<List<string>> pipeline, bool isForwarding)
         {
             var hazardConfirmation = new HazardConfirmation();
             string destReg;
 
             //Determine what the source register is for the "instructionToCompare"
             if (instructionToCompare[0].Equals("sw", StringComparison.OrdinalIgnoreCase))
-            {
                 destReg = instructionToCompare[3];
-            }
             else 
-            {
                 destReg = instructionToCompare[1];
-            }
 
             //Now take our current instruction and compare the registers that are being read against the destReg
             var regsToCompare = new List<string>();
@@ -157,16 +166,67 @@ namespace Online_Final_Computer_Architecture
             hazardConfirmation.Name = hazardConfirmation.IsHazard ? "RAW Hazard" : "None";
 
             //Determine amount of stalls based on where reg is needed versus available
-            var pipeToCompare = pipeline[comparePipeIndex].IndexOf("W");
-            var currentPipe = pipeline[currentPipeIndex].IndexOf("D");
-            if(pipeToCompare > currentPipe) //Only get stalls if the arrow is to the left, anything equal or to the right doesn't need a stall
-                hazardConfirmation.StallCount = Math.Abs(currentPipe - pipeToCompare);
+            if (isForwarding)
+            {
+                //Determine where we are forwarding from based on the instruction
+                //If its regular arithmetic instruction, we can forward from ALU
+                //If its Load/store, we can forward from the memory stage
+                if (instructionToCompare[0].Equals("sw", StringComparison.OrdinalIgnoreCase) || instructionToCompare[0].Equals("lw", StringComparison.OrdinalIgnoreCase))
+                {
+                    var fwdIndex = pipeline[comparePipeIndex].IndexOf("M");
+                    //Now find out where we can forward it to
+                    if (currentInstruction[0].Equals("sw", StringComparison.OrdinalIgnoreCase) || currentInstruction[0].Equals("lw", StringComparison.OrdinalIgnoreCase))
+                    {
+                        //The arrow should always be in front if its an lw/sw instruction forwarding to a lw or sw instruction
+                        //The latest it will need the data is at memory... which is always a stage ahead of the ALU/Execute stage
+                        hazardConfirmation.StallCount = 0;
+
+                    }
+                    else
+                    {
+                        int currentPipeStageIndex = pipeline[currentPipeIndex].IndexOf("E");
+                        if (currentPipeStageIndex == fwdIndex)
+                            hazardConfirmation.StallCount = 1;
+                        else if(currentPipeStageIndex < fwdIndex)
+                            hazardConfirmation.StallCount = Math.Abs(currentPipeStageIndex - fwdIndex);
+
+                    }
+                }
+                else 
+                {
+                    var fwdIndex = pipeline[comparePipeIndex].IndexOf("E");
+                    //Now find out where we can forward it to
+                    if (currentInstruction[0].Equals("sw", StringComparison.OrdinalIgnoreCase) || currentInstruction[0].Equals("lw", StringComparison.OrdinalIgnoreCase))
+                    {
+                        //The arrow should always be in front if its an arithmetic instruction forwarding to a lw or sw instruction
+                        //The latest it will need the data is at memory... which is always a stage ahead of the ALU/Execute stage
+                        hazardConfirmation.StallCount = 0;
+                    }
+                    else
+                    {
+                        int currentPipeStageIndex = pipeline[currentPipeIndex].IndexOf("E");
+                        if (currentPipeStageIndex == fwdIndex)
+                            hazardConfirmation.StallCount = 1;
+                        else if (currentPipeStageIndex < fwdIndex) //This case should never happen... forwarding can't go backwards like this
+                            hazardConfirmation.StallCount = Math.Abs(currentPipeStageIndex - fwdIndex);
+                    }
+                } 
+                
+            }
+            else 
+            {
+                var pipeStageToCompareIndex = pipeline[comparePipeIndex].IndexOf("W");
+                var currentPipeStageIndex = pipeline[currentPipeIndex].IndexOf("D");
+                if (pipeStageToCompareIndex > currentPipeStageIndex) //Only get stalls if the arrow is to the left, anything equal or to the right doesn't need a stall
+                    hazardConfirmation.StallCount = Math.Abs(currentPipeStageIndex - pipeStageToCompareIndex);
+            }
   
             //Show what registers are affected
             foreach (var reg in hazardConfirmation.Registers) 
             {
                 hazardConfirmation.Message += $"{reg} ";
             }
+
             return hazardConfirmation;
         }
 
@@ -342,38 +402,46 @@ namespace Online_Final_Computer_Architecture
             return pipeline;
         }
 
-        public void RecreatePipeline(int instructionToUpdateIndex, List<List<string>> pipeline, HazardConfirmation hazardConfirmation, bool isForwarding = false) 
+        public void RecreatePipeline(int instructionToUpdateIndex, List<List<string>> pipeline, HazardConfirmation hazardConfirmation, bool isForwarding) 
         {
             var pipeToUpdate = pipeline[instructionToUpdateIndex];
 
             if (hazardConfirmation.Name.Equals("RAW Hazard"))
             {
-                //Find the fetch index and insert at 1 index after to delay decoding
-                var fetchIndex = pipeToUpdate.IndexOf("F");
-                var stallStartIndex = fetchIndex + 1;
-
-                for (int i = 0; i < hazardConfirmation.StallCount; i++)
+                if (isForwarding)
                 {
-                    //Include the stalls into the pipe
-                    pipeToUpdate.Insert(stallStartIndex, "S");
+                    //Now that we are forwarding... we need to know from where
+
                 }
-
-                //Now fix all instructions below the updated pipe
-                int shiftInstructionCount = pipeToUpdate.IndexOf("D");
-                for (int j = instructionToUpdateIndex + 1; j < pipeline.Count; j++)
+                else 
                 {
-                    var currentPipe = pipeline[j];
-                    if (currentPipe.Count > 0) currentPipe.Clear();
-                    for (int k = 0; k < shiftInstructionCount; k++)
+                    //Find the fetch index and insert at 1 index after to delay decoding
+                    var fetchIndex = pipeToUpdate.IndexOf("F");
+                    var stallStartIndex = fetchIndex + 1;
+
+                    for (int i = 0; i < hazardConfirmation.StallCount; i++)
                     {
-                        currentPipe.Add(" ");
+                        //Include the stalls into the pipe
+                        pipeToUpdate.Insert(stallStartIndex, "S");
                     }
-                    currentPipe.Add("F");
-                    currentPipe.Add("D");
-                    currentPipe.Add("E");
-                    currentPipe.Add("M");
-                    currentPipe.Add("W");
-                    shiftInstructionCount++;
+
+                    //Now fix all instructions below the updated pipe
+                    int shiftInstructionCount = pipeToUpdate.IndexOf("D");
+                    for (int j = instructionToUpdateIndex + 1; j < pipeline.Count; j++)
+                    {
+                        var currentPipe = pipeline[j];
+                        if (currentPipe.Count > 0) currentPipe.Clear();
+                        for (int k = 0; k < shiftInstructionCount; k++)
+                        {
+                            currentPipe.Add(" ");
+                        }
+                        currentPipe.Add("F");
+                        currentPipe.Add("D");
+                        currentPipe.Add("E");
+                        currentPipe.Add("M");
+                        currentPipe.Add("W");
+                        shiftInstructionCount++;
+                    }
                 }
             }
             
