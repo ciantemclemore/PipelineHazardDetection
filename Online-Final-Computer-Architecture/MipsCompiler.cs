@@ -10,6 +10,7 @@ namespace Online_Final_Computer_Architecture
         private readonly Configuration _configuration;
 
         private List<string> _commands = new List<string>();
+        private List<HazardConfirmation> _potentialHazards = new List<HazardConfirmation>();
 
 
         public MipsCompiler(Configuration configuration)
@@ -18,16 +19,23 @@ namespace Online_Final_Computer_Architecture
         }
 
 
-        public List<List<string>> ExecuteCommands()
+        public Solution ExecuteCommands()
         {
             var tokens = SplitCommandsIntoTokens(_commands);
 
-            var pipeline = CreateBasePipeline(_commands.Count);
+            var pipelineNoForwardingUnit = CreateBasePipeline(_commands.Count);
+            var pipelineWithForwardingUnit = CreateBasePipeline(_commands.Count);
 
-            TestForHazards(pipeline, tokens);
+            TestForHazards(pipelineNoForwardingUnit, tokens, false);
+            TestForHazards(pipelineWithForwardingUnit, tokens, true);
 
+            var solution = new Solution();
 
-            return pipeline;
+            solution.Pipelines.Add(pipelineNoForwardingUnit);
+            solution.Pipelines.Add(pipelineWithForwardingUnit);
+            
+
+            return solution;
         }
 
         private List<List<string>> SplitCommandsIntoTokens(List<string> commands)
@@ -42,19 +50,18 @@ namespace Online_Final_Computer_Architecture
             return parsedCommands;
         }
 
-        private void TestForHazards(List<List<string>> pipeline, List<List<string>> commands)
+        private void TestForHazards(List<List<string>> pipeline, List<List<string>> commands, bool isForwarding)
         {
             StructuralHazardTest(pipeline, commands);
-            DataHazardTest(pipeline, commands, false);
+            DataHazardTest(pipeline, commands, isForwarding);
         }
 
         private void DataHazardTest(List<List<string>> pipeline, List<List<string>> commands, bool isForwarding)
         {
+            //First instruction is always a gimme
+            
+
             //Compare each level of the instructions
-
-
-
-
             for (int i = 1; i < commands.Count; i++)
             {
                 var currentInstruction = commands[i];
@@ -65,23 +72,29 @@ namespace Online_Final_Computer_Architecture
                     var instructionToCompare = commands[j];
                     var instructionToCompareIndex = commands.IndexOf(instructionToCompare);
 
-
-                    //Create the pipeline without a forwarding unit
-                    HazardConfirmation rawHazardConfirmation = new HazardConfirmation();
-                    HazardConfirmation warHazardConfirmation = new HazardConfirmation();
-                    HazardConfirmation wawHazardConfirmation = new HazardConfirmation();
-
                     
-                    rawHazardConfirmation = ReadAfterWriteHazardCheck(instructionToCompare, currentInstruction, 
+                    var rawHazardConfirmation = ReadAfterWriteHazardCheck(instructionToCompare, currentInstruction, 
                                                                         instructionToCompareIndex,currentInstructionIndex, pipeline, isForwarding);
                         
-                    warHazardConfirmation = WriteAfterReadHazardCheck(instructionToCompare, currentInstruction,
+                    var warHazardConfirmation = WriteAfterReadHazardCheck(instructionToCompare, currentInstruction,
                                                                         instructionToCompareIndex, currentInstructionIndex, pipeline);
 
-                    wawHazardConfirmation = WriteAfterWriteHazardCheck(instructionToCompare, currentInstruction,
+                    var wawHazardConfirmation = WriteAfterWriteHazardCheck(instructionToCompare, currentInstruction,
                                                                         instructionToCompareIndex, currentInstructionIndex, pipeline);
+
+                    //Add all hazard confirmations for the current instruction
+                    //if (_potentialHazards.ContainsKey(i))
+                    //{
+                    //    _potentialHazards[i].Add(rawHazardConfirmation);
+                    //    _potentialHazards[i].Add(warHazardConfirmation);
+                    //    _potentialHazards[i].Add(wawHazardConfirmation);
+                    //}
+                    //else
+                    //{
+                    //    _potentialHazards.Add(i, new List<HazardConfirmation> { rawHazardConfirmation, warHazardConfirmation, warHazardConfirmation });
+                    //}
                     
-
+                    //Redraw the pipeline
                     RecreatePipeline(currentInstructionIndex, currentInstruction[0], instructionToCompare[0], pipeline, rawHazardConfirmation, isForwarding);
 
                     //if (rawHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, rawHazardConfirmation);
@@ -99,32 +112,14 @@ namespace Online_Final_Computer_Architecture
 
 
                     //Output all hazards: RAW, WAR, WAW
-                    Console.Write($"{currentInstruction[0]}: {rawHazardConfirmation.Name}  ");
-                    Console.WriteLine($"Registers: {rawHazardConfirmation.Message}");
+                    //Console.Write($"{currentInstruction[0]}: {rawHazardConfirmation.Name}  ");
+                    //Console.WriteLine($"Registers: {rawHazardConfirmation.Message}");
 
-                    Console.Write($"{currentInstruction[0]}: {warHazardConfirmation.Name}  ");
-                    Console.WriteLine($"Registers: {warHazardConfirmation.Message}");
+                    //Console.Write($"{currentInstruction[0]}: {warHazardConfirmation.Name}  ");
+                    //Console.WriteLine($"Registers: {warHazardConfirmation.Message}");
 
-                    Console.Write($"{currentInstruction[0]}: {wawHazardConfirmation.Name}  ");
-                    Console.WriteLine($"Registers: {wawHazardConfirmation.Message}");
-
-
-
-
-                    //for (int k = 0; k < currentInstruction.Count; k++)
-                    //{
-                    //    int pipeToCompareContentIndex = currentInstructionIndex + k;
-
-                    //    if (pipeToCompareContentIndex < instructionToCompare.Count)
-                    //    {
-
-                    //    }
-                    //    else
-                    //    {
-
-                    //        break;
-                    //    }
-                    //}
+                    //Console.Write($"{currentInstruction[0]}: {wawHazardConfirmation.Name}  ");
+                    //Console.WriteLine($"Registers: {wawHazardConfirmation.Message}");
                 }
             }
         }
@@ -143,9 +138,15 @@ namespace Online_Final_Computer_Architecture
             //Now take our current instruction and compare the registers that are being read against the destReg
             var regsToCompare = new List<string>();
 
-            if (currentInstruction[0].Equals("sw", StringComparison.OrdinalIgnoreCase))
+            //if ((currentInstruction[0].Equals("sw", StringComparison.OrdinalIgnoreCase) || currentInstruction[0].Equals("lw", StringComparison.OrdinalIgnoreCase)) &&
+            //    (instructionToCompare[0].Equals("sw", StringComparison.OrdinalIgnoreCase) || instructionToCompare[0].Equals("lw", StringComparison.OrdinalIgnoreCase)))
+            //{
+            //    regsToCompare.Add(currentInstruction[3]);
+            //}
+            if ((currentInstruction[0].Equals("sw", StringComparison.OrdinalIgnoreCase) || currentInstruction[0].Equals("lw", StringComparison.OrdinalIgnoreCase)) 
+                    && destReg.Equals(currentInstruction[1]))
             {
-                regsToCompare.Add(currentInstruction[1]);
+                regsToCompare.Add(currentInstruction[3]);
             }
             else 
             {
@@ -163,7 +164,7 @@ namespace Online_Final_Computer_Architecture
 
             //Add final results to the hazard confirmation
             hazardConfirmation.IsHazard = hazardConfirmation.Registers.Count > 0 ? true : false;
-            hazardConfirmation.Name = hazardConfirmation.IsHazard ? "RAW Hazard" : "None";
+            hazardConfirmation.Name = hazardConfirmation.IsHazard ? "RAW" : "None";
 
             //Determine amount of stalls based on where reg is needed versus available
             if (isForwarding)
@@ -283,7 +284,7 @@ namespace Online_Final_Computer_Architecture
 
             //Add final results to the hazard confirmation
             hazardConfirmation.IsHazard = hazardConfirmation.Registers.Count > 0 ? true : false;
-            hazardConfirmation.Name = hazardConfirmation.IsHazard ? "WAR Hazard" : "None";
+            hazardConfirmation.Name = hazardConfirmation.IsHazard ? "WAR" : "None";
 
             //Determine amount of stalls based on where reg is needed versus available
             var pipeToCompare = pipeline[comparePipeIndex].IndexOf("D");
@@ -332,7 +333,7 @@ namespace Online_Final_Computer_Architecture
 
             //Add final results to the hazard confirmation
             hazardConfirmation.IsHazard = hazardConfirmation.Registers.Count > 0 ? true : false;
-            hazardConfirmation.Name = hazardConfirmation.IsHazard ? "WAW Hazard" : "None";
+            hazardConfirmation.Name = hazardConfirmation.IsHazard ? "WAW" : "None";
 
             //No stalls needed in this case, depends on system... goes based on general pipeline
             hazardConfirmation.StallCount = 0;
@@ -421,7 +422,7 @@ namespace Online_Final_Computer_Architecture
         {
             var pipeToUpdate = pipeline[instructionToUpdateIndex];
 
-            if (hazardConfirmation.Name.Equals("RAW Hazard"))
+            if (hazardConfirmation.Name.Equals("RAW"))
             {
                 if (isForwarding)
                 {
@@ -466,7 +467,7 @@ namespace Online_Final_Computer_Architecture
                 }
             }
             
-            if (hazardConfirmation.Name.Equals("WAR Hazard"))
+            if (hazardConfirmation.Name.Equals("WAR"))
             {
                 //Nothing will happen in a regular pipeline
                 //Writeback will always be 4 cycles away from decode
@@ -474,7 +475,7 @@ namespace Online_Final_Computer_Architecture
                 //we assume that there are no early writes, late reads, or out-of-order execution
             }
             
-            if (hazardConfirmation.Name.Equals("WAW Hazard")) 
+            if (hazardConfirmation.Name.Equals("WAW")) 
             {
                 //Nothing will happen in a regular pipeline
                 //We are assuming instructions that the reordering won't mess up the value in registers

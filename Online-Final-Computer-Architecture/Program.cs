@@ -25,8 +25,8 @@ namespace Online_Final_Computer_Architecture
                     case 1:
                         //Gather the user's commands
                         GetUserInputInstructions(configuration, mipsCompiler);
-                        var results = mipsCompiler.ExecuteCommands();
-                        PrintResults(results);
+                        var result = mipsCompiler.ExecuteCommands();
+                        PrintResults(result);
                         //PrintState(configuration);
                         //PrintResults(results);
                         break;
@@ -96,11 +96,22 @@ namespace Online_Final_Computer_Architecture
             Console.WriteLine();
         }
 
-        private static void PrintResults(List<List<string>> results) 
+        private static void PrintResults(Solution result) 
         {
-            foreach (var result in results) 
+            Console.WriteLine("Without Forwarding Unit");
+            foreach (var pipe in result.Pipelines[0]) 
             {
-                foreach (var sequence in result) 
+                foreach (var sequence in pipe)
+                {
+                    Console.Write($"{sequence} ");
+                }
+                Console.WriteLine();
+            }
+            Console.WriteLine();
+            Console.WriteLine("With Forwarding Unit");
+            foreach (var pipe in result.Pipelines[1])
+            {
+                foreach (var sequence in pipe)
                 {
                     Console.Write($"{sequence} ");
                 }
