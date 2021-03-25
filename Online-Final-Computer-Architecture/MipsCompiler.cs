@@ -45,7 +45,7 @@ namespace Online_Final_Computer_Architecture
         private void TestForHazards(List<List<string>> pipeline, List<List<string>> commands)
         {
             StructuralHazardTest(pipeline, commands);
-            DataHazardTest(pipeline, commands, true);
+            DataHazardTest(pipeline, commands, false);
         }
 
         private void DataHazardTest(List<List<string>> pipeline, List<List<string>> commands, bool isForwarding)
@@ -82,7 +82,7 @@ namespace Online_Final_Computer_Architecture
                                                                         instructionToCompareIndex, currentInstructionIndex, pipeline);
                     
 
-                    RecreatePipeline(currentInstructionIndex, pipeline, rawHazardConfirmation);
+                    RecreatePipeline(currentInstructionIndex, currentInstruction[0], instructionToCompare[0], pipeline, rawHazardConfirmation, isForwarding);
 
                     //if (rawHazardConfirmation.IsHazard) RecreatePipeline(currentInstructionIndex, pipeline, rawHazardConfirmation);
                     
@@ -174,13 +174,21 @@ namespace Online_Final_Computer_Architecture
                 if (instructionToCompare[0].Equals("sw", StringComparison.OrdinalIgnoreCase) || instructionToCompare[0].Equals("lw", StringComparison.OrdinalIgnoreCase))
                 {
                     var fwdIndex = pipeline[comparePipeIndex].IndexOf("M");
+
                     //Now find out where we can forward it to
                     if (currentInstruction[0].Equals("sw", StringComparison.OrdinalIgnoreCase) || currentInstruction[0].Equals("lw", StringComparison.OrdinalIgnoreCase))
                     {
-                        //The arrow should always be in front if its an lw/sw instruction forwarding to a lw or sw instruction
-                        //The latest it will need the data is at memory... which is always a stage ahead of the ALU/Execute stage
-                        hazardConfirmation.StallCount = 0;
+                        //Need to determine if destination register and decoded registers match for lw/sw to lw/sw instructions
+                        var regToCompare = currentInstruction[3];
 
+                        //We know that a sw or lw that just happened needs to recalculate its address in a proceeding instruction due to offset
+                        if (destReg.Equals(regToCompare))
+                        {
+                            //data will be needed as early as the "execution" stage
+                            var executeIndex = pipeline[currentPipeIndex].IndexOf("E");
+                            if (fwdIndex == executeIndex)
+                                hazardConfirmation.StallCount = 1;
+                        }
                     }
                     else
                     {
@@ -189,7 +197,6 @@ namespace Online_Final_Computer_Architecture
                             hazardConfirmation.StallCount = 1;
                         else if(currentPipeStageIndex < fwdIndex)
                             hazardConfirmation.StallCount = Math.Abs(currentPipeStageIndex - fwdIndex);
-
                     }
                 }
                 else 
@@ -198,9 +205,17 @@ namespace Online_Final_Computer_Architecture
                     //Now find out where we can forward it to
                     if (currentInstruction[0].Equals("sw", StringComparison.OrdinalIgnoreCase) || currentInstruction[0].Equals("lw", StringComparison.OrdinalIgnoreCase))
                     {
-                        //The arrow should always be in front if its an arithmetic instruction forwarding to a lw or sw instruction
-                        //The latest it will need the data is at memory... which is always a stage ahead of the ALU/Execute stage
-                        hazardConfirmation.StallCount = 0;
+                        var regToCompare = currentInstruction[3];
+
+                        //We know that a sw or lw may need to calculate the address based on a register written to in add/sub
+                        //This will generally not get hit
+                        if (destReg.Equals(regToCompare))
+                        {
+                            //data will be needed as early as the "execution" stage
+                            var executeIndex = pipeline[currentPipeIndex].IndexOf("E");
+                            if (fwdIndex == executeIndex)
+                                hazardConfirmation.StallCount = 1;
+                        }
                     }
                     else
                     {
@@ -402,7 +417,7 @@ namespace Online_Final_Computer_Architecture
             return pipeline;
         }
 
-        public void RecreatePipeline(int instructionToUpdateIndex, List<List<string>> pipeline, HazardConfirmation hazardConfirmation, bool isForwarding) 
+        public void RecreatePipeline(int instructionToUpdateIndex, string currentInstruction, string instructionToCompare, List<List<string>> pipeline, HazardConfirmation hazardConfirmation, bool isForwarding) 
         {
             var pipeToUpdate = pipeline[instructionToUpdateIndex];
 
@@ -410,8 +425,15 @@ namespace Online_Final_Computer_Architecture
             {
                 if (isForwarding)
                 {
-                    //Now that we are forwarding... we need to know from where
+                    //We know stalls go before "execute" in forwarding since we go back to ALU
+                    var decodeIndex = pipeToUpdate.IndexOf("D");
+                    var stallStartIndex = decodeIndex + 1;
 
+                    for (int i = 0; i < hazardConfirmation.StallCount; i++) 
+                    {
+                        //Include the stalls into the pipe
+                        pipeToUpdate.Insert(stallStartIndex, "S");
+                    }
                 }
                 else 
                 {
@@ -424,24 +446,23 @@ namespace Online_Final_Computer_Architecture
                         //Include the stalls into the pipe
                         pipeToUpdate.Insert(stallStartIndex, "S");
                     }
-
-                    //Now fix all instructions below the updated pipe
-                    int shiftInstructionCount = pipeToUpdate.IndexOf("D");
-                    for (int j = instructionToUpdateIndex + 1; j < pipeline.Count; j++)
+                }
+                //Now fix all instructions below the updated pipe
+                int shiftInstructionCount = pipeToUpdate.IndexOf("D");
+                for (int j = instructionToUpdateIndex + 1; j < pipeline.Count; j++)
+                {
+                    var currentPipe = pipeline[j];
+                    if (currentPipe.Count > 0) currentPipe.Clear();
+                    for (int k = 0; k < shiftInstructionCount; k++)
                     {
-                        var currentPipe = pipeline[j];
-                        if (currentPipe.Count > 0) currentPipe.Clear();
-                        for (int k = 0; k < shiftInstructionCount; k++)
-                        {
-                            currentPipe.Add(" ");
-                        }
-                        currentPipe.Add("F");
-                        currentPipe.Add("D");
-                        currentPipe.Add("E");
-                        currentPipe.Add("M");
-                        currentPipe.Add("W");
-                        shiftInstructionCount++;
+                        currentPipe.Add(" ");
                     }
+                    currentPipe.Add("F");
+                    currentPipe.Add("D");
+                    currentPipe.Add("E");
+                    currentPipe.Add("M");
+                    currentPipe.Add("W");
+                    shiftInstructionCount++;
                 }
             }
             

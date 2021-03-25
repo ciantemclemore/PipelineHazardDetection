@@ -10,7 +10,7 @@ namespace Online_Final_Computer_Architecture
 
         public List<string> Registers { get; set; } = new List<string>();
 
-        public int StallCount { get; set; }
+        public int StallCount { get; set; } = 0;
 
         public string Message { get; set; }
 
