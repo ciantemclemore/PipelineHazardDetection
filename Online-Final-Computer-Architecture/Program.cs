@@ -12,8 +12,8 @@ namespace Online_Final_Computer_Architecture
 
         static void Main(string[] args)
         {
-            var configuration = GetConfigurationData(@"Database\Configuration.json");
-            var mipsCompiler = new MipsCompiler(configuration);
+            //var configuration = GetConfigurationData(@"Database\Configuration.json");
+            var mipsCompiler = new MipsCompiler();
 
             bool runProg = true;
 
@@ -25,7 +25,7 @@ namespace Online_Final_Computer_Architecture
                 {
                     case 1:
                         //Gather the user's commands
-                        GetUserInputInstructions(configuration, mipsCompiler);
+                        GetUserInputInstructions(mipsCompiler);
                         var result = mipsCompiler.ExecuteCommands();
                         PrintResults(result);
                         //PrintState(configuration);
@@ -60,7 +60,7 @@ namespace Online_Final_Computer_Architecture
         }
 
 
-        static void GetUserInputInstructions(Configuration configuration, MipsCompiler mipsCompiler) 
+        static void GetUserInputInstructions(MipsCompiler mipsCompiler) 
         {
             Console.WriteLine("Enter instructions: (Press enter after entering each instruction)");
             Console.WriteLine("Enter 'run' command once finished to compile");
@@ -74,25 +74,23 @@ namespace Online_Final_Computer_Architecture
                 }
 
                 string input = Console.ReadLine();
-                //var commandValidation = mipsCompiler.IsValidCommand(input); 
 
-
-                if (input.Equals(key, StringComparison.OrdinalIgnoreCase)) 
+                if (input.Equals(key, StringComparison.OrdinalIgnoreCase))
                 {
                     break;
                 }
 
-                mipsCompiler.QueueCommand(input);
-                instructionCount++;
-                //if (commandValidation.IsValid)
-                //{
-                //    mipsCompiler.QueueCommand(input);
-                //    instructionCount++;
-                //}
-                //else 
-                //{
-                //    Console.WriteLine(commandValidation.Message);
-                //}
+                var commandValidation = mipsCompiler.IsValidCommand(input); 
+
+                if (commandValidation.IsValid)
+                {
+                    mipsCompiler.QueueCommand(input);
+                    instructionCount++;
+                }
+                else
+                {
+                    Console.WriteLine(commandValidation.Message);
+                }
             }
             Console.WriteLine();
         }
@@ -109,7 +107,7 @@ namespace Online_Final_Computer_Architecture
             }
             Console.WriteLine();
 
-            Console.WriteLine("Without Forwarding Unit");
+            Console.WriteLine("Without Forwarding Unit:");
             foreach (var pipe in result.Pipelines[0]) 
             {
                 foreach (var sequence in pipe)
@@ -119,7 +117,7 @@ namespace Online_Final_Computer_Architecture
                 Console.WriteLine();
             }
             Console.WriteLine();
-            Console.WriteLine("With Forwarding Unit");
+            Console.WriteLine("With Forwarding Unit:");
             foreach (var pipe in result.Pipelines[1])
             {
                 foreach (var sequence in pipe)
@@ -129,27 +127,6 @@ namespace Online_Final_Computer_Architecture
                 Console.WriteLine();
             }
             Console.WriteLine();
-        }
-
-        private static Configuration GetConfigurationData(string path)
-        {
-            var jsonData = string.Empty;
-            var configuration = new Configuration();
-            try
-            {
-                using (StreamReader sr = new StreamReader(path))
-                {
-                    jsonData = sr.ReadToEnd();
-                }
-                configuration = JsonSerializer.Deserialize<Configuration>(jsonData);
-
-            }
-            catch (IOException e)
-            {
-                Console.WriteLine("The file could not be read: ");
-                Console.WriteLine(e.Message);
-            }
-            return configuration;
         }
     }
 }
