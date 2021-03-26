@@ -134,7 +134,7 @@ namespace Online_Final_Computer_Architecture
             //Add final results to the hazard confirmation
             hazardConfirmation.IsHazard = hazardConfirmation.Registers.Count > 0 ? true : false;
             hazardConfirmation.Name = hazardConfirmation.IsHazard ? "RAW" : "None";
-            hazardConfirmation.Instruction = currentInstruction[0].Equals("sw") || currentInstruction[0].Equals("sw") ?
+            hazardConfirmation.Instruction = currentInstruction[0].Equals("sw") || currentInstruction[0].Equals("lw") ?
                                              $"{currentInstruction[0]} {currentInstruction[1]}, ({currentInstruction[2]}){currentInstruction[3]}" :
                                              $"{currentInstruction[0]} {currentInstruction[1]}, {currentInstruction[2]} {currentInstruction[3]}";
 
@@ -258,7 +258,7 @@ namespace Online_Final_Computer_Architecture
             //Add final results to the hazard confirmation
             hazardConfirmation.IsHazard = hazardConfirmation.Registers.Count > 0 ? true : false;
             hazardConfirmation.Name = hazardConfirmation.IsHazard ? "WAR" : "None";
-            hazardConfirmation.Instruction = currentInstruction[0].Equals("sw") || currentInstruction[0].Equals("sw") ?
+            hazardConfirmation.Instruction = currentInstruction[0].Equals("sw") || currentInstruction[0].Equals("lw") ?
                                              $"{currentInstruction[0]} {currentInstruction[1]}, ({currentInstruction[2]}){currentInstruction[3]}" :
                                              $"{currentInstruction[0]} {currentInstruction[1]}, {currentInstruction[2]} {currentInstruction[3]}";
 
@@ -310,7 +310,7 @@ namespace Online_Final_Computer_Architecture
             //Add final results to the hazard confirmation
             hazardConfirmation.IsHazard = hazardConfirmation.Registers.Count > 0 ? true : false;
             hazardConfirmation.Name = hazardConfirmation.IsHazard ? "WAW" : "None";
-            hazardConfirmation.Instruction = currentInstruction[0].Equals("sw") || currentInstruction[0].Equals("sw") ?
+            hazardConfirmation.Instruction = currentInstruction[0].Equals("sw") || currentInstruction[0].Equals("lw") ?
                                              $"{currentInstruction[0]} {currentInstruction[1]}, ({currentInstruction[2]}){currentInstruction[3]}" :
                                              $"{currentInstruction[0]} {currentInstruction[1]}, {currentInstruction[2]} {currentInstruction[3]}";
 
@@ -358,7 +358,7 @@ namespace Online_Final_Computer_Architecture
 
                                 var hazardConfirmation = new HazardConfirmation()
                                 {
-                                    Instruction = currentInstruction[0].Equals("sw") || currentInstruction[0].Equals("sw") ?
+                                    Instruction = currentInstruction[0].Equals("sw") || currentInstruction[0].Equals("lw") ?
                                              $"{currentInstruction[0]} {currentInstruction[1]}, ({currentInstruction[2]}){currentInstruction[3]}" :
                                              $"{currentInstruction[0]} {currentInstruction[1]}, {currentInstruction[2]} {currentInstruction[3]}",
                                     IsHazard = true,
@@ -366,13 +366,11 @@ namespace Online_Final_Computer_Architecture
                                     StallCount = 1,
                                     Message = $"None"
                                 };
-
                                 //Add to hazard list
                                 if (!_potentialHazards.Any(h => h.Name.Equals(hazardConfirmation.Name) && h.Instruction[0].Equals(hazardConfirmation.Instruction[0])))
                                 {
                                     _potentialHazards.Add(hazardConfirmation);
                                 }
-
                                 RecreatePipeline(currentInstructionIndex, pipeline, hazardConfirmation, isForwarding);
                             }
                         }
